@@ -280,21 +280,12 @@
       border-radius: 50%;
       border: 2px solid var(--cyan);
       box-shadow: 0 0 25px rgba(0,212,255,0.3);
-      background: linear-gradient(135deg, var(--surface), #1a1a24);
+      background-image: url('profile.jpg');
+      background-size: cover;
+      background-position: center;
       animation: float 4s ease-in-out infinite;
       margin-bottom: 30px;
       position: relative;
-    }
-    .avatar::after {
-      content: "VP";
-      position: absolute;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      font-family: var(--font-heading);
-      font-size: 2.5rem;
-      font-weight: 700;
-      color: var(--cyan);
-      letter-spacing: 2px;
     }
     @keyframes float {
       0%, 100% { transform: translateY(0); }
