@@ -1315,7 +1315,8 @@
       const sections = document.querySelectorAll('section, header');
       sections.forEach(sec => {
         const sectionTop = sec.offsetTop;
-        if (window.scrollY >= sectionTop - 200) {
+        // Trigger when the section reaches the middle of the viewport
+        if (window.scrollY >= sectionTop - (window.innerHeight / 2)) {
           current = sec.getAttribute('id');
         }
       });
