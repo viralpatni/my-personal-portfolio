@@ -94,12 +94,10 @@ export default function Home() {
   const [role, setRole] = useState(roles[0]);
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [githubState, setGithubState] = useState<'loading' | 'ready' | 'profile-sync' | 'cached' | 'curated' | 'error'>('loading');
-  const [lastSynced, setLastSynced] = useState<string | null>(null);
   const [command, setCommand] = useState('');
   const [terminal, setTerminal] = useState(["Welcome, Viral's portfolio terminal is ready.", "Type 'help' to see available commands."]);
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
-  const [copied, setCopied] = useState(false);
   const [resumeOpen, setResumeOpen] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -130,11 +128,7 @@ export default function Home() {
         const payload = await res.json();
         if (Array.isArray(payload.repos) && payload.repos.length) {
           setRepositories(payload.repos);
-          setLastSynced(payload.cachedAt ?? new Date().toISOString());
-          const src = payload.source as string;
-          if (src === 'api') setGithubState('ready');
-          else if (src === 'profile-sync') setGithubState('profile-sync');
-          else setGithubState('curated');
+          setGithubState('ready');
           return;
         }
       }
@@ -189,6 +183,12 @@ export default function Home() {
     if (value !== 'clear') setHistory(h => [...h, value].slice(-30));
     setHistoryIndex(-1);
     if (value === 'clear') { setTerminal([]); setCommand(''); return; }
+    if (value === 'resume') {
+      setResumeOpen(true);
+      setTerminal(lines => [...lines, `> ${value}`, 'opening resume preview...']);
+      setCommand('');
+      return;
+    }
     if (value.startsWith('goto ')) {
       const target = value.replace('goto ', '').trim();
       const el = document.getElementById(target);
@@ -198,15 +198,17 @@ export default function Home() {
       return;
     }
     const replies: Record<string, string> = {
-      help: 'whoami · education · skills · projects · achievements · contact · email · resume · goto <section> · date · neofetch · clear',
+      help: 'whoami · education · skills · stack · projects · achievements · experience · contact · email · github · resume · goto <section> · date · neofetch · clear',
       whoami: 'Viral Patni · Full Stack Developer · VIT Chennai',
       education: 'VIT Chennai · B.Tech CSE Core · Expected 2028',
       skills: 'Python · C/C++ · Java · JavaScript · React · SQL · MySQL · NumPy · Pandas · AI/ML',
+      stack: 'Next.js · React · TypeScript · Python · SQL · Git · GitHub',
       projects: 'Live repositories are rendered in #projects. Try: goto projects',
       achievements: 'Solve-A-Thon Hackathon · Lead @ Haryana Hood Literary Club (50+ members)',
+      experience: 'Full Stack Developer · AI/ML Explorer · Literary Club Lead · VIT Chennai',
       contact: `${email} · github.com/viralpatni`,
       email: email,
-      resume: 'Resume preview opens from the nav. Click Resume ↗ up top.',
+      github: 'github.com/viralpatni',
       date: new Date().toString(),
       neofetch: 'OS: VIT-OS · Shell: ambition · Memory: unlimited',
     };
@@ -231,33 +233,15 @@ export default function Home() {
     }
   };
 
-  const copyEmail = async () => {
-    try { await navigator.clipboard?.writeText(email); } catch { /* clipboard unavailable */ }
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1800);
-  };
-
-  const downloadVCard = () => {
-    const vcard = ['BEGIN:VCARD', 'VERSION:3.0', 'FN:Viral Patni', 'TITLE:Full Stack Developer', `EMAIL:${email}`, 'URL:https://github.com/viralpatni', 'URL:https://www.linkedin.com/in/viral-patni-0a103a319', 'END:VCARD'].join('\n');
-    const blob = new Blob([vcard], { type: 'text/vcard' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'viral-patni.vcf';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   const submitContact = (event: React.FormEvent) => {
     event.preventDefault();
     if (!contactForm.name.trim() || !contactForm.email.trim() || !contactForm.message.trim()) { setContactStatus('error'); return; }
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(contactForm.email)) { setContactStatus('error'); return; }
     setContactStatus('sending');
-    window.setTimeout(() => {
-      setContactStatus('sent');
-      setContactForm({ name: '', email: '', message: '' });
-      window.setTimeout(() => setContactStatus('idle'), 3500);
-    }, 900);
+    const subject = encodeURIComponent(`Portfolio contact from ${contactForm.name.trim()}`);
+    const body = encodeURIComponent(`Name: ${contactForm.name.trim()}\nEmail: ${contactForm.email.trim()}\n\n${contactForm.message.trim()}`);
+    window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+    setContactStatus('sent');
   };
 
   const displayRepos = repositories.length ? repositories : curatedProjects;
@@ -328,18 +312,18 @@ export default function Home() {
         <div className="hero-cta">
           <a className="button primary magnetic" href="#projects" {...magnetic}>View my work <span>↘</span></a>
           <button className="button secondary magnetic" type="button" onClick={() => setResumeOpen(true)} {...magnetic}>Preview resume <span>↗</span></button>
+          <a className="button secondary magnetic" href={resumePath} download {...magnetic}>Download resume <span>↓</span></a>
         </div>
         <div className="hero-meta"><span>Full-Stack · AI/ML · DSA</span><span>VIT Chennai · CSE</span></div>
       </div>
 
-      <div className="hero-studio" aria-label={`Portfolio slideshow: ${currentSlide.title}`} onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
-        <div className="studio-watermark">VP</div>
+      <div className="hero-studio" role="region" aria-label={`Portfolio slideshow: ${currentSlide.title}`} onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
         <div className="studio-topline"><span>SELECTED WORK / 2026</span><span className="studio-live"><i></i> {currentSlide.image ? 'PERSONAL' : 'AVAILABLE'}</span></div>
         <AnimatePresence mode="wait">
           <motion.div className={`studio-main ${currentSlide.image ? 'studio-profile-slide' : ''}`} key={currentSlide.id} initial={reduceMotion ? {} : { opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} exit={reduceMotion ? {} : { opacity: 0, x: -28 }} transition={{ duration: 0.4 }}>
             {currentSlide.image && <img className="studio-photo" src={currentSlide.image} alt="Viral Patni outdoors" />}
             <div className="studio-number">{String((activeSlide % studioSlides.length) + 1).padStart(2, '0')}</div>
-            <div><span className="studio-eyebrow">{currentSlide.title.toUpperCase()}</span><h2>{currentSlide.image ? <>The person<br /><em>behind the code.</em></> : currentSlide.description}</h2><p>{currentSlide.meta}</p></div>
+            <div className="studio-copy"><span className="studio-eyebrow">{currentSlide.title.toUpperCase()}</span><h2>{currentSlide.image ? <>The person<br /><em>behind the code.</em></> : currentSlide.description}</h2><p>{currentSlide.meta}</p></div>
           </motion.div>
         </AnimatePresence>
         <div className="studio-rail"><span>{String((activeSlide % studioSlides.length) + 1).padStart(2, '0')} / {String(studioSlides.length).padStart(2, '0')}</span><span>PROJECT INDEX</span><span>{currentSlide.image ? 'PORTRAIT' : 'CASE STUDY'}</span>{currentSlide.url ? <a href={currentSlide.url} target="_blank" rel="noreferrer" aria-label={`Open ${currentSlide.title} on GitHub`}>↗</a> : <b>✦</b>}</div>
@@ -359,15 +343,15 @@ export default function Home() {
     <section className="skills section" id="skills"><motion.div {...reveal} className="section-kicker">03 / THE TOOLKIT</motion.div><div className="skills-heading"><motion.h2 {...reveal}>Tools I use to<br /><em>make things real.</em></motion.h2><p>Skills from my resume, arranged as a working constellation rather than a checklist. Click any card for level + where I use it.</p></div><div className="skill-cloud">{skills.map(([mark, name, tone, icon, description]) => {
       const extra = skillLevels[name];
       const open = expandedSkill === name;
-      return <div className={`skill-tile tone-${tone} reveal-card spotlight${open ? ' expanded' : ''}`} key={name} onClick={() => setExpandedSkill(open ? null : name)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedSkill(open ? null : name); } }} role="button" tabIndex={0} aria-expanded={open} aria-label={`${name} skill`} {...spotlight}><span className="skill-mark"><img src={`https://cdn.simpleicons.org/${icon}`} alt="" onError={event => { event.currentTarget.style.display = 'none'; }} />{mark}</span><div className="skill-name">{name}</div><p>{description}</p>{open && extra && <div className="skill-extra"><div className="skill-level"><span>{extra.level}</span><span>{extra.pct}%</span></div><div className="skill-bar"><i style={{ width: `${extra.pct}%` }} /></div><small>Used in: {extra.usedIn}</small></div>}</div>;
+      return <div className={`skill-tile tone-${tone} reveal-card spotlight${open ? ' expanded' : ''}`} key={name} onClick={() => setExpandedSkill(open ? null : name)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedSkill(open ? null : name); } }} role="button" tabIndex={0} aria-expanded={open} aria-label={`${name} skill`} {...spotlight}><span className="skill-mark"><img src={`https://cdn.simpleicons.org/${icon}`} alt="" loading="lazy" decoding="async" onError={event => { event.currentTarget.style.display = 'none'; }} />{mark}</span><div className="skill-name">{name}</div><p>{description}</p>{open && extra && <div className="skill-extra"><div className="skill-level"><span>{extra.level}</span><span>{extra.pct}%</span></div><div className="skill-bar"><i style={{ width: `${extra.pct}%` }} /></div><small>Used in: {extra.usedIn}</small></div>}</div>;
     })}</div></section>
 
     <section className="projects section" id="projects">
       <motion.div {...reveal} className="section-kicker">04 / LIVE WORK</motion.div>
-      <div className="section-head"><motion.h2 {...reveal}>Built with <em>intent.</em></motion.h2><span className="status">● {githubState === 'ready' ? 'LIVE SYNC' : githubState === 'profile-sync' ? `SYNCED · ${repositories.length} REPOS` : githubState === 'loading' ? 'SYNCING…' : githubState === 'curated' ? 'CURATED' : 'LOADING'}</span></div>
+      <div className="section-head"><motion.h2 {...reveal}>Built with <em>intent.</em></motion.h2><span className="status" aria-live="polite">● {githubState === 'ready' ? 'LIVE SYNC' : githubState === 'profile-sync' ? `SYNCED · ${repositories.length} REPOS` : githubState === 'loading' ? 'SYNCING…' : githubState === 'curated' ? 'CURATED' : 'LOADING'}</span></div>
       <div className="project-toolbar">
         <div className="filter-pills" role="tablist" aria-label="Filter projects">
-          {(['all', 'fullstack', 'ai-ml', 'dsa'] as ProjectFilter[]).map(f => <button key={f} role="tab" aria-selected={projectFilter === f} className={projectFilter === f ? 'active' : ''} onClick={() => setProjectFilter(f)}>{f === 'all' ? 'All' : f === 'fullstack' ? 'Full-Stack' : f === 'ai-ml' ? 'AI / ML' : 'DSA'}</button>)}
+          {(['all', 'fullstack', 'ai-ml', 'dsa'] as ProjectFilter[]).map(f => <button type="button" key={f} role="tab" aria-selected={projectFilter === f} className={projectFilter === f ? 'active' : ''} onClick={() => setProjectFilter(f)}>{f === 'all' ? 'All' : f === 'fullstack' ? 'Full-Stack' : f === 'ai-ml' ? 'AI / ML' : 'DSA'}</button>)}
         </div>
         <div className="project-tools">
           <input value={projectQuery} onChange={e => setProjectQuery(e.target.value)} placeholder="Search repos…" aria-label="Search repositories" />
@@ -378,7 +362,7 @@ export default function Home() {
       <div className="repo-grid">
         {githubState === 'loading' ? [1, 2, 3].map(item => <div className="repo-skeleton" key={`skeleton-${item}`} />)
           : filteredRepos.length ? filteredRepos.map(repo => (
-            <div className="repo-card reveal-card spotlight" key={`repo-${repo.id}`} onClick={() => setSelectedRepo(repo)} onKeyDown={e => { if (e.key === 'Enter') setSelectedRepo(repo); }} role="button" tabIndex={0} aria-label={`Open case study for ${repo.name}`} {...spotlight}>
+            <div className="repo-card reveal-card spotlight" key={`repo-${repo.id}`} onClick={() => setSelectedRepo(repo)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedRepo(repo); } }} role="button" tabIndex={0} aria-label={`Open case study for ${repo.name}`} {...spotlight}>
               <div className="repo-top"><span className="language-dot" />{repo.language ?? 'Repository'}<span className="stars">★ {repo.stargazers_count}</span></div>
               <h3>{repo.name.replaceAll('-', ' ')}</h3>
               <p>{repo.description ?? 'A GitHub repository by Viral Patni.'}</p>
@@ -390,7 +374,7 @@ export default function Home() {
       </div>
     </section>
 
-    <section className="terminal-section section" id="terminal"><div className="section-kicker">05 / TERMINAL</div><div className="terminal-layout"><div><h2>Ask the<br /><em>command line.</em></h2><p>A tiny interface for a little more context. Try <code>help</code>, <code>goto projects</code>, ↑/↓ for history.</p></div><div className="terminal"><div className="terminal-bar"><span>viral@portfolio:~</span><span>⌘ K</span></div><div className="terminal-output" ref={terminalOutputRef}>{terminal.map((line, index) => <div key={`term-${index}`}>{line}</div>)}</div><div className="terminal-input"><span>›</span><input value={command} onChange={event => setCommand(event.target.value)} onKeyDown={onTerminalKey} placeholder="type a command" aria-label="Terminal command" /></div></div></div></section>
+    <section className="terminal-section section" id="terminal"><div className="section-kicker">05 / TERMINAL</div><div className="terminal-layout"><div><h2>Ask the<br /><em>command line.</em></h2><p>A tiny interface for a little more context. Try <code>help</code>, <code>goto projects</code>, ↑/↓ for history.</p></div><div className="terminal"><div className="terminal-bar"><span>viral@portfolio:~</span><span>⌘ K</span></div><div className="terminal-output" ref={terminalOutputRef} aria-live="polite">{terminal.map((line, index) => <div key={`term-${index}`}>{line}</div>)}</div><div className="terminal-input"><span aria-hidden="true">›</span><input value={command} onChange={event => setCommand(event.target.value)} onKeyDown={onTerminalKey} placeholder="type a command" aria-label="Terminal command" /></div></div></div></section>
 
     <section className="timeline section" id="timeline">
       <motion.div {...reveal} className="section-kicker">06 / THE PATH</motion.div>
@@ -420,15 +404,14 @@ export default function Home() {
 
     <section className="contact section" id="contact">
       <motion.div {...reveal} className="contact-card">
-        <div key="contact-body"><div className="section-kicker">07 / SAY HELLO</div><h2>Have a good<br /><em>problem?</em></h2><p>Tell me what you are working on. I am always up for a thoughtful conversation.</p>
-          <div className="contact-buttons"><button className="email-button" onClick={copyEmail}>{copied ? 'Copied email ✓' : `${email} · Copy`}</button><a className="email-button" href={`mailto:${email}`}>Write email ↗</a><button className="email-button" onClick={downloadVCard}>vCard ↓</button></div>
+          <div key="contact-body"><div className="section-kicker">07 / SAY HELLO</div><h2>Have a good<br /><em>problem?</em></h2><p>Tell me what you are working on. I am always up for a thoughtful conversation.</p>
           <form className="contact-form" onSubmit={submitContact}>
             <label><span>Name</span><input value={contactForm.name} onChange={e => setContactForm(f => ({ ...f, name: e.target.value }))} placeholder="Your name" aria-label="Your name" /></label>
             <label><span>Email</span><input value={contactForm.email} onChange={e => setContactForm(f => ({ ...f, email: e.target.value }))} placeholder="you@example.com" aria-label="Your email" /></label>
             <label><span>Message</span><textarea value={contactForm.message} onChange={e => setContactForm(f => ({ ...f, message: e.target.value }))} placeholder="Start a conversation…" rows={3} aria-label="Your message" /></label>
-            <button className="button primary" type="submit" disabled={contactStatus === 'sending'}>{contactStatus === 'sending' ? 'Sending…' : contactStatus === 'sent' ? 'Sent ✓ — I reply fast' : 'Send message ↗'}</button>
+            <button className="button primary" type="submit" disabled={contactStatus === 'sending'}>{contactStatus === 'sending' ? 'Opening email…' : contactStatus === 'sent' ? 'Email draft opened ✓' : 'Send message ↗'}</button>
             {contactStatus === 'error' && <small className="form-error">Add a valid name, email, and message.</small>}
-            {contactStatus === 'sent' && <small className="form-ok">Saved locally — wire Resend/Formspree later for delivery.</small>}
+            {contactStatus === 'sent' && <small className="form-ok" role="status">Your email app should now contain the completed message.</small>}
           </form>
         </div>
         <div key="contact-actions" className="contact-actions"><button className="button primary" type="button" onClick={() => setResumeOpen(true)}>Resume preview ↗</button><a className="button secondary" href={resumePath} download>Download PDF ↓</a><a className="button secondary" href="https://www.linkedin.com/in/viral-patni-0a103a319" target="_blank" rel="noreferrer">LinkedIn ↗</a></div>
